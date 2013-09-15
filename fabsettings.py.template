@@ -7,3 +7,9 @@ USER          =     "joe"
 PASSWORD      =     "secret"
 SETTINGS_SUBDIR =   "foo"
 VIRTUALENVS   =     "/path/to/virtualenvs"
+
+
+WF_DATABASE_USER_PASSWORD = "foo"
+WF_DATABASE_DEFAULT_PASSWORD = 'bar'
+# db_type either mysql or postgresql
+WF_DATABASE_TYPE = 'mysql'

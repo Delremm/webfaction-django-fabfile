@@ -30,14 +30,14 @@ env.supervisor_dir  = env.home + '/webapps/supervisor'
 env.virtualenv_dir  = VIRTUALENVS
 env.supervisor_ve_dir = env.virtualenv_dir + '/supervisor'
 
+
 def deploy():
     bootstrap()
-    
+
     if not exists(env.supervisor_dir):
         install_supervisor()
-    
-    install_app()
 
+    install_app()
 
 
 def bootstrap():
@@ -54,7 +54,7 @@ def install_app():
 
     # upload template to supervisor conf
     upload_template('templates/gunicorn.conf',
-                    '%s/conf.d/%s.conf' % (env.supervisor_dir,env.project),
+                    '%s/conf.d/%s.conf' % (env.supervisor_dir, env.project),
                     {
                         'project': env.project,
                         'project_dir': env.settings_dir,
@@ -129,7 +129,7 @@ def reload_app(arg=None):
 
     if arg <> "quick":
         with cd(env.project_dir):
-            _ve_run(env.project, "easy_install -i http://downloads.egenix.com/python/index/ucs4/ egenix-mx-base")
+            #_ve_run(env.project, "easy_install -i http://downloads.egenix.com/python/index/ucs4/ egenix-mx-base")
             _ve_run(env.project, "pip install -r requirements.pip")
             _ve_run(env.project, "pip install -e ./")
             _ve_run(env.project, "manage.py syncdb")
