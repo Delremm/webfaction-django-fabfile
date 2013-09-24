@@ -53,31 +53,48 @@ def install_app():
     env.app_port = response['port']
 
     # upload template to supervisor conf
-    upload_template('templates/gunicorn.conf',
-                    '%s/conf.d/%s.conf' % (env.supervisor_dir, env.project),
-                    {
-                        'project': env.project,
-                        'project_dir': env.settings_dir,
-                        'virtualenv':'%s/%s' % (env.virtualenv_dir, env.project),
-                        'port': env.app_port,
-                        'user': env.user,
-                     }
-                    )
-
-    with cd(env.home + '/webapps'):
-        if not exists(env.project_dir + '/setup.py'):
-            run('git clone %s %s' % (env.repo ,env.project_dir))
-
-    _create_ve(env.project)
+    upload_template(
+        'templates/gunicorn.conf',
+        '%s/conf.d/%s.conf' % (env.supervisor_dir, env.project),
+        {
+            'project': env.project,
+            'project_dir': env.settings_dir,
+            'virtualenv': '%s/%s' % (env.virtualenv_dir, env.project),
+            'port': env.app_port,
+            'user': env.user,
+            'supervisor_dir': direnv.supervisor_dir,
+        }
+    )
+    upload_template(
+        'templates/gunicorn_start.bash',
+        '%s/gunicorn_start_%s.bash' % (env.supervisor_dir, env.project),
+        {
+            'project': env.project,
+            'project_dir': env.settings_dir,
+            'virtualenv': '%s/%s' % (env.virtualenv_dir, env.project),
+            'port': env.app_port,
+        }
+    )
+    run("chmod u+x %s/conf.d/gunicorn_start_%s.bash" % (env.supervisor_dir, env.project))
+    clone_project()
+    create_ve(env.project)
     reload_app()
     restart_app()
+
+
+def clone_project():
+    with cd(env.home + '/webapps'):
+        if not exists(env.project_dir + '/setup.py'):
+            run('git clone %s %s' % (env.repo, env.project_dir))
+    create_ve(env.project)
+
 
 def install_supervisor():
     """Installs supervisor in its wf app and own virtualenv
     """
     response = _webfaction_create_app("supervisor")
     env.supervisor_port = response['port']
-    _create_ve('supervisor')
+    create_ve('supervisor')
     if not exists(env.supervisor_ve_dir + 'bin/supervisord'):
         _ve_run('supervisor','pip install supervisor')
     # uplaod supervisor.conf template
@@ -120,20 +137,36 @@ def install_supervisor():
             run('./start_supervisor.sh stop && ./start_supervisor.sh start')
 
 
+def sync_app():
+
+    with cd(env.project_dir):
+        run('git pull')
+        #_ve_run(env.project, "easy_install -i http://downloads.egenix.com/python/index/ucs4/ egenix-mx-base")
+        _ve_run(env.project, "python manage.py createcachetable %s_cache_table" % env.project)
+        _ve_run(env.project, "python manage.py syncdb")
+        _ve_run(env.project, "python manage.py migrate")
+        _ve_run(env.project, "python manage.py collectstatic")
+
+def local_push():
+    local("git add ./..")
+    local("git add -u ./..")
+    local("git commit -m 'bag fix'")
+    local("git push origin master")
+
 
 def reload_app(arg=None):
     """Pulls app and refreshes requirements"""
 
     with cd(env.project_dir):
+        #run('git stash')
         run('git pull')
 
     if arg <> "quick":
         with cd(env.project_dir):
             #_ve_run(env.project, "easy_install -i http://downloads.egenix.com/python/index/ucs4/ egenix-mx-base")
-            _ve_run(env.project, "pip install -r requirements.pip")
-            _ve_run(env.project, "pip install -e ./")
-            _ve_run(env.project, "manage.py syncdb")
-            _ve_run(env.project, "manage.py collectstatic")
+            _ve_run(env.project, "pip install -r requirements/production.txt")
+        
+        sync_app()
 
     restart_app()
 
@@ -142,12 +175,13 @@ def restart_app():
     """Restarts the app using supervisorctl"""
 
     with cd(env.supervisor_dir):
+        #_ve_run('supervisor','supervisorctl -c supervisord.conf')
         _ve_run('supervisor','supervisorctl reread && supervisorctl reload')
         _ve_run('supervisor','supervisorctl restart %s' % env.project)
 
 ### Helper functions
 
-def _create_ve(name):
+def create_ve(name):
     """creates virtualenv using virtualenvwrapper
     """
     if not exists(env.virtualenv_dir + '/name'):
@@ -174,5 +208,3 @@ def _webfaction_create_app(app):
     except xmlrpclib.Fault:
         print "Could not create app on webfaction %s, app name maybe already in use" % app
         sys.exit(1)
-
-
